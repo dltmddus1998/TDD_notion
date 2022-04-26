@@ -46,9 +46,9 @@ ex) Chai, expect.js, better-assert
 
 </aside>
 
-![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/fed51b00-0b80-40ab-98b8-f419bea28d57/Untitled.png)
+<img src="https://user-images.githubusercontent.com/73332608/165264711-21126b2b-0cc4-4ac7-8050-411d1dbc0d0c.png" width="350" height="150">
 
-![npm run test 실행시](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/e8eeea37-f390-43da-b7e5-16bdb9a74c95/Untitled.png)
+<img src="https://user-images.githubusercontent.com/73332608/165264529-91eba12f-fdfa-498c-b8e6-3472c038d38f.png" width="800" height="400">
 
 npm run test 실행시
 
@@ -274,8 +274,6 @@ class Calculator {
 module.exports = Calculator;
 ```
 
-![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/89770934-de9f-4a60-8555-6237284a09f1/Untitled.png)
-
 ```jsx
 // calculator.test.js
 const Calculator = require('../calculator.js');
@@ -339,6 +337,9 @@ describe('Calculator', () => {
     })
 });
 ```
+
+<img src="https://user-images.githubusercontent.com/73332608/165265218-ea278aa1-a02e-4e66-a763-df0fd86f2501.png" width="350" height="250">
+
 
 **👀 여기서 잠깐!!**
 
