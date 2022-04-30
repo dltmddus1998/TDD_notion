@@ -7,4 +7,4 @@ TDD 드림코딩 강의 기반 노션 정리
 
 [✍️ 2. 유닛테스트 실전 코드](https://github.com/dltmddus1998/TDD_notion/blob/main/UnitTest.md)
 
-[+) 유닛테스트 실전 코드_notion](https://vaulted-occupation-087.notion.site/31c1bd803e7d4e6d9e95e0f140aeb822)
+[+) 유닛테스트 실전 코드_notion](https://vaulted-occupation-087.notion.site/1410e717a21548e2ad80560ec7249a25)
