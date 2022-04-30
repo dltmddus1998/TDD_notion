@@ -357,7 +357,7 @@ describe('Calculator', () => {
 이 상황에서 jest --coverage를 터미널에 입력하면 다음과 같이 나온다.**
 > 
 
-![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/e132982b-7138-430d-a693-0e66561fb5ec/Untitled.png)
+<img src="https://user-images.githubusercontent.com/73332608/166111027-7f8ee373-6b16-4f51-96fb-161e0e768db7.png" width="480" height="250">
 
 ✔︎ `Uncovered line`을 보면 17~18번째 줄은 커버할 수 있는 테스트 코드가 없다는 것을 알 수 있다. (해당 line에는 위에서 말한 합이 100을 초과할 때에 대한 코드가 작성돼있다.) → 94.28퍼센트만 테스트 완료됐다.
 
