@@ -719,3 +719,79 @@ describe('ProductService - Stub', () => {
 상황에 맞게 어떤 것을 쓸지 유연하게 결정해야 한다.**
 
 </aside>
+<br>
+
+## Mock을 이용한 테스트
+
+---
+
+### 👀 사용자 로그인
+
+> **행동에 대한 테스트(호출했는지 안했는지와 같은...)는 stub으로 구현하기에는 무리가 있으므로 mock을 이용해보자.**
+> 
+
+```jsx
+// user_client.js
+class UserClient {
+    login(id, password) {
+        return fetch('http://example.com/login/id+password')
+            .then(response => response.json());
+    }
+}
+
+module.exports = UserClient;
+```
+
+```jsx
+// user_service.js
+class UserService {
+    constructor(userClient) {
+        this.userClient = userClient;
+        this.isLogedIn = false;
+    }
+
+    login(id, password) {
+        if (!this.isLogedIn) {
+            return this.userClient
+                .login(id, password)
+                .then(data => this.isLogedIn = true);
+        }
+    }
+}
+
+module.exports = UserService;
+
+```
+
+```jsx
+// user_service.test.js
+const UserService = require('../user_service.js');
+const UserClient = require('../user_client.js');
+jest.mock('../user_client')
+
+describe('UserService', () => {
+    const login = jest.fn(async () => 'success');
+    UserClient.mockImplementation(() => {
+        return {
+            login
+        };
+    });
+    let userService;
+
+    beforeEach(() => {
+        userService = new UserService(new UserClient());
+    });
+
+    it('calls login() on UserClient when trying to login', async () => {
+        await userService.login('abc', 'abc');
+        expect(login.mock.calls.length).toBe(1);
+    });
+
+    it('should not call login() on UserClient again if already logged in', async () => {
+        await userService.login('abc', 'abc');
+        await userService.login('abc', 'abc');
+
+        expect(login.mock.calls.length).toBe(1);
+    })
+})
+```
