@@ -241,9 +241,9 @@ collectCoverageFrom: ['**/*.{js,jsx}', '!**/node_modules/**'],
 ```
 
 <aside>
-💡 **확장자가 js, jsx인 모든 파일에 대해서 coverage를 확인할 수 있게 하는 collectCoverageFrom 옵션을 설정해준다. 
-단, node_modules 안에 있는 파일들에 대해선 coverage를 보지 않게 따로 설정해준다.**
+💡 확장자가 js, jsx인 모든 파일에 대해서 coverage를 확인할 수 있게 하는 collectCoverageFrom 옵션을 설정해준다. 
+단, node_modules 안에 있는 파일들에 대해선 coverage를 보지 않게 따로 설정해준다.
 
 </aside>
 
-![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/0d6684f2-90a0-4837-8202-182114533f00/Untitled.png)
+<img src="https://user-images.githubusercontent.com/73332608/168229409-f7a761ba-c023-4b48-990d-0a46154226fe.png" width="800" height="480">
