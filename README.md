@@ -12,3 +12,9 @@ TDD 드림코딩 강의 기반 노션 정리
 [✍️ 3. 좋은 테스트 원칙](https://github.com/dltmddus1998/TDD_notion/blob/main/Testing_Principles.md)
 
 [+) 좋은 테스트 원칙_notion](https://vaulted-occupation-087.notion.site/156fde997e3c4bd682b9327e4786c670)
+
+[✍️ 4. 노드 - 유닛테스트](https://github.com/dltmddus1998/TDD_notion/blob/main/Node_UnitTest.md)
+
+[+) 노드 유닛테스트_SetUp](https://vaulted-occupation-087.notion.site/7b063aad84d147bbb387c5d8d4146af8)
+
+[+) 노드 유닛테스트_실습](https://vaulted-occupation-087.notion.site/2022498507bd4d569efe96f24386dc22)
