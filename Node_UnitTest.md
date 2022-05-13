@@ -73,3 +73,177 @@ export default {
   "start": "nodemon app"
 },
 ```
+
+<br>
+<br>
+
+## Dwitter - 테스트 코드 작성하기
+
+---
+
+### Middleware Test Code
+
+> **외부 라이브러리, 데이터베이스에 접근하는 것은 테스트 코드의 속도를 느려지게 하는 요인이 될 수 있으므로 이 부분들은 모두 mock 처리해준다.**
+> 
+
+```jsx
+// middleware/auth.js
+import jwt from 'jsonwebtoken';
+import { config } from '../config.js';
+import * as userRepository from '../data/auth.js';
+
+const AUTH_ERROR = { message: 'Authentication Error' };
+
+export const isAuth = async (req, res, next) => {
+  const authHeader = req.get('Authorization');
+  if (!(authHeader && authHeader.startsWith('Bearer '))) {
+    return res.status(401).json(AUTH_ERROR);
+  }
+
+  const token = authHeader.split(' ')[1];
+  jwt.verify(token, config.jwt.secretKey, async (error, decoded) => {
+    if (error) {
+      return res.status(401).json(AUTH_ERROR);
+    }
+    const user = await userRepository.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json(AUTH_ERROR);
+    }
+    req.userId = user.id; // req.customData
+    req.token = token;
+    next();
+  });
+};
+```
+
+```jsx
+// middleware/test/auth.test.js
+import httpMocks from 'node-mocks-http';
+import { isAuth } from '../auth.js';
+import faker from 'faker';
+import jwt from 'jsonwebtoken';
+import * as userRepository from '../../data/auth.js';
+
+jest.mock('jsonwebtoken');
+jest.mock('../../data/auth.js');
+
+describe('Auth Middlewear', () => {
+    // Fail
+    it('returns 401 for the request without Authorization header', async () => {
+        const request = httpMocks.createRequest({
+            method: 'GET',
+            url: '/tweets',
+        });
+        const response = httpMocks.createResponse();
+        const next = jest.fn();
+
+        await isAuth(request, response, next);
+
+        expect(response.statusCode).toBe(401);
+        expect(response._getJSONData().message).toBe('Authentication Error');
+        // 401 error시에 다음 로직으로 넘어가지 않도록!! -> next() x
+        // expect(next).toHaveBeenCalled(0)
+        expect(next).not.toBeCalled();
+    });
+
+    it('returns 401 for the request with unsupported Authorization header', async () => {
+        const request = httpMocks.createRequest({
+            method: 'GET',
+            url: '/tweets',
+            headers: { Authorization: 'Basic' },
+        });
+        const response = httpMocks.createResponse();
+        const next = jest.fn();
+
+        await isAuth(request, response, next);
+
+        expect(response.statusCode).toBe(401);
+        expect(response._getJSONData().message).toBe('Authentication Error');
+        expect(next).not.toBeCalled();
+    });
+
+    it('returns 401 for the request with invalid token', async () => {
+        const token = faker.random.alphaNumeric(128); 
+        const request = httpMocks.createRequest({
+            method: 'GET',
+            url: '/tweets',
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const response = httpMocks.createResponse();
+        const next = jest.fn();
+        jwt.verify = jest.fn((token, secret, callback) => {
+            callback(new Error('bad token'), undefined);
+        });
+
+        await isAuth(request, response, next);
+
+        expect(response.statusCode).toBe(401);
+        expect(response._getJSONData().message).toBe('Authentication Error');
+        expect(next).not.toBeCalled();
+    });
+
+    it('returns 401 when cannot find a user by id from the JWT', async () => {
+        const token = faker.random.alphaNumeric(128); 
+        const userId = faker.random.alphaNumeric(32);
+        const request = httpMocks.createRequest({
+            method: 'GET',
+            url: '/tweets',
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const response = httpMocks.createResponse();
+        const next = jest.fn();
+        jwt.verify = jest.fn((token, secret, callback) => {
+            callback(undefined, { id: userId });
+        });
+        userRepository.findById = jest.fn((id) => Promise.resolve(undefined));
+
+        await isAuth(request, response, next);
+
+        expect(response.statusCode).toBe(401);
+        expect(response._getJSONData().message).toBe('Authentication Error');
+        expect(next).not.toBeCalled();
+    });
+
+    // Success
+    it('passes a request with valid Authorization header with token', async () => {
+        const token = faker.random.alphaNumeric(128); 
+        const userId = faker.random.alphaNumeric(32);
+        const request = httpMocks.createRequest({
+            method: 'GET',
+            url: '/tweets',
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const response = httpMocks.createResponse();
+        const next = jest.fn();
+        jwt.verify = jest.fn((token, secret, callback) => {
+            callback(undefined, { id: userId });
+        });
+        userRepository.findById = jest.fn((id) => Promise.resolve({id}));
+
+        await isAuth(request, response, next);
+
+        expect(request).toMatchObject({ userId, token });
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+})
+```
+
+```jsx
+// jest.config.mjs
+.
+.
+.
+// An array of glob patterns indicating a set of files for which coverage information should be collected
+collectCoverageFrom: ['**/*.{js,jsx}', '!**/node_modules/**'],
+.
+.
+.
+```
+
+<aside>
+💡 **확장자가 js, jsx인 모든 파일에 대해서 coverage를 확인할 수 있게 하는 collectCoverageFrom 옵션을 설정해준다. 
+단, node_modules 안에 있는 파일들에 대해선 coverage를 보지 않게 따로 설정해준다.**
+
+</aside>
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/0d6684f2-90a0-4837-8202-182114533f00/Untitled.png)
