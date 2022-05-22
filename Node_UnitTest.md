@@ -304,3 +304,244 @@ describe('Validator Middlewear', () => {
     });
 });
 ```
+
+<br>
+<br>
+<br>
+
+### Tweet Controller Test Code
+
+⭐️ **그 전에 트윗 컨트롤러 리팩토링하기!!**
+
+**원래 코드**
+
+```jsx
+// controller/tweet.js
+import * as tweetRepository from '../data/tweet.js';
+import { getSocketIO } from '../connection/socket.js';
+
+export async function getTweets(req, res) {
+  const username = req.query.username;
+  const data = await (username
+    ? tweetRepository.getAllByUsername(username)
+    : tweetRepository.getAll());
+  res.status(200).json(data);
+}
+
+export async function getTweet(req, res, next) {
+  const id = req.params.id;
+  const tweet = await tweetRepository.getById(id);
+  if (tweet) {
+    res.status(200).json(tweet);
+  } else {
+    res.status(404).json({ message: `Tweet id(${id}) not found` });
+  }
+}
+
+export async function createTweet(req, res, next) {
+  const { text } = req.body;
+  const tweet = await tweetRepository.create(text, req.userId);
+  res.status(201).json(tweet);
+  getSocketIO().emit('tweets', tweet);
+}
+
+export async function updateTweet(req, res, next) {
+  const id = req.params.id;
+  const text = req.body.text;
+  const tweet = await tweetRepository.getById(id);
+  if (!tweet) {
+    return res.status(404).json({ message: `Tweet not found: ${id}` });
+  }
+  if (tweet.userId !== req.userId) {
+    return res.sendStatus(403);
+  }
+  const updated = await tweetRepository.update(id, text);
+  res.status(200).json(updated);
+}
+
+export async function deleteTweet(req, res, next) {
+  const id = req.params.id;
+  const tweet = await tweetRepository.getById(id);
+  if (!tweet) {
+    return res.status(404).json({ message: `Tweet not found: ${id}` });
+  }
+  if (tweet.userId !== req.userId) {
+    return res.sendStatus(403);
+  }
+  await tweetRepository.remove(id);
+  res.sendStatus(204);
+}
+```
+
+**리팩토링한 코드**
+
+```jsx
+// controller/tweet.js
+export class TweetController {
+  constructor(tweetRepository, getSocket) {
+    this.tweets = tweetRepository;
+    this.getSocket = getSocket;
+  }
+
+  async getTweets(req, res) {
+    const username = req.query.username;
+    const data = await (username
+      ? this.tweets.getAllByUsername(username)
+      : this.tweets.getAll());
+    res.status(200).json(data);
+  }
+
+  async getTweet(req, res, next) {
+    const id = req.params.id;
+    const tweet = await this.tweets.getById(id);
+    if (tweet) {
+      res.status(200).json(tweet);
+    } else {
+      res.status(404).json({ message: `Tweet id(${id}) not found` });
+    }
+  }
+
+  async createTweet(req, res, next) {
+    const { text } = req.body;
+    const tweet = await this.tweets.create(text, req.userId);
+    res.status(201).json(tweet);
+    this.getSocket.emit('tweets', tweet);
+  }
+  
+  async updateTweet(req, res, next) {
+    const id = req.params.id;
+    const text = req.body.text;
+    const tweet = await this.tweets.getById(id);
+    if (!tweet) {
+      return res.status(404).json({ message: `Tweet not found: ${id}` });
+    }
+    if (tweet.userId !== req.userId) {
+      return res.sendStatus(403);
+    }
+    const updated = await this.tweets.update(id, text);
+    res.status(200).json(updated);
+  }
+  
+  async deleteTweet(req, res, next) {
+    const id = req.params.id;
+    const tweet = await this.tweets.getById(id);
+    if (!tweet) {
+      return res.status(404).json({ message: `Tweet not found: ${id}` });
+    }
+    if (tweet.userId !== req.userId) {
+      return res.sendStatus(403);
+    }
+    await this.tweets.remove(id);
+    res.sendStatus(204);
+  }
+}
+```
+
+```jsx
+// router/tweets.js
+// Refactoring: routing부분을 클래스로 묶어주었다
+import express from 'express';
+import 'express-async-errors';
+import { body } from 'express-validator';
+import * as tweetController from '../controller/tweet.js';
+import { isAuth } from '../middleware/auth.js';
+import { validate } from '../middleware/validator.js';
+
+const router = express.Router();
+
+const validateTweet = [
+  body('text')
+    .trim()
+    .isLength({ min: 3 })
+    .withMessage('text should be at least 3 characters'),
+  validate,
+];
+
+export default function tweetsRouter(tweetController) {
+  // GET /tweet
+  // GET /tweets?username=:username
+  router.get('/', isAuth, tweetController.getTweets);
+
+  // GET /tweets/:id
+  router.get('/:id', isAuth, tweetController.getTweet);
+
+  // POST /tweeets
+  router.post('/', isAuth, validateTweet, tweetController.createTweet);
+
+  // PUT /tweets/:id
+  router.put('/:id', isAuth, validateTweet, tweetController.updateTweet);
+
+  // DELETE /tweets/:id
+  router.delete('/:id', isAuth, tweetController.deleteTweet);
+}
+```
+
+```jsx
+// app.js
+// Refactoring: /tweets경로를 router/tweets.js의 tweetsRouter를 통해 가져오게 한다
+import express from 'express';
+import 'express-async-errors';
+import cors from 'cors';
+import morgan from 'morgan';
+import helmet from 'helmet';
+import tweetsRouter from './router/tweets.js';
+import authRouter from './router/auth.js';
+import { config } from './config.js';
+import { initSocket, getSocketIO } from './connection/socket.js';
+import { sequelize } from './db/database.js';
+import { TweetController } from './controller/tweet.js';
+import * as tweetRepository from './data/tweet.js';
+
+const app = express();
+
+const corsOption = {
+  origin: config.cors.allowedOrigin,
+  optionsSuccessStatus: 200,
+};
+app.use(express.json());
+app.use(helmet());
+app.use(cors(corsOption));
+app.use(morgan('tiny'));
+
+app.use('/tweets', tweetsRouter(new TweetController(tweetRepository, getSocketIO)));
+app.use('/auth', authRouter);
+
+app.use((req, res, next) => {
+  res.sendStatus(404);
+});
+
+app.use((error, req, res, next) => {
+  console.error(error);
+  res.sendStatus(500);
+});
+
+sequelize.sync().then(() => {
+  console.log('Server is started....');
+  const server = app.listen(config.port);
+  initSocket(server);
+});
+```
+
+### 👀 여기서 잠깐!!
+
+<aside>
+💡 트윗 컨트롤러의 리팩토링을 진행한 이유는 무엇일까요?
+</aside>
+
+<br>
+
+✔︎ 모듈에서 어떤 특정 라이브러리를 바로 가져다 쓰고, 다른 모듈을 내부에서 바로 생성하거나 (→ **원래 코드의 경우 import를 통해 데이터 등을 가져왔다**) 호출하면, **모듈간의 결합도가 높아진다**. [**타이트하게 커플링되었다**]
+
+✔︎ 라이브러리나 외부 모듈의 함수와 사용법이 변경되는 경우, 그걸 사용하는 모든 곳에서 코드 수정이 일어나야 하므로 **타이트한 커플링**은 지양해야한다.
+
+위에서 말한 부분을 지양하는 방법으로는, ***Dependency Injection***이 있다.
+
+→ 해당 클래스/모듈 안에서 필요할 때마다 생성하거나 직접적으로 접근하는 것이 아니라, **외부 라이브러리/모듈을 한단계 감싸는 클래스를 만들고, 그 외부 의존성을 밖에서 주입해주는 것이다.**
+
+🖊 이를 통해, 업데이트가 필요한 경우, 그 외부 의존성 내부만 업데이트 해주면 되는 것이다. [**디커플링**]
+
+⭐️ **자바스크립트에서 mock으로 간편하게 덮어쓰기가 되지만, 이를 남용할 경우(모듈간의 결합도가 높은데, 코드 개선 없이 대충 덮어 쓰는 등...) 나중에 유지보수가 힘들어진다. 
+ 따라서, 외부 라이브러리나 외부 모듈 전체를 mock하는 테스트 코드는 지양해야한다.**
+
+ ‼️ **[출처]by ellie of Dream Coding ‼️**
+
