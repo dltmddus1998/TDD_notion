@@ -545,3 +545,310 @@ sequelize.sync().then(() => {
 
  ‼️ **[출처]by ellie of Dream Coding ‼️**
 
+<br>
+<br>
+<br>
+
+### Test Code
+
+```jsx
+import faker from 'faker';
+import { TweetController } from '../tweet.js';
+import httpMocks from 'node-mocks-http';
+
+describe('TweetController', () => {
+    let tweetController;
+    let tweetsRepository;
+    let mockedSocket;
+    beforeEach(() => {
+        tweetsRepository = {};
+        mockedSocket = { emit: jest.fn() };
+        tweetController = new TweetController(
+            tweetsRepository,
+            () => mockedSocket
+        );
+    });
+
+    // getTweets
+    describe('getTweets', () => {
+        it('returns all tweets when username is not provided', async () => {
+            const request = httpMocks.createRequest();
+            const response = httpMocks.createResponse();
+            const allTweets = [
+                {text: faker.random.words(3)},
+                {text: faker.random.words(3)}
+            ];
+            tweetsRepository.getAll = () => allTweets;
+
+            await tweetController.getTweets(request, response);
+
+            expect(response.statusCode).toBe(200);
+            expect(response._getJSONData()).toEqual(allTweets);
+        });
+
+        it ('returns all tweets for the given user when username is provided', async () => {
+            const username = faker.internet.userName();
+            const request = httpMocks.createRequest({
+                query: { username },
+            });
+            const response = httpMocks.createResponse();
+            const userTweets = [
+                {text: faker.random.words(3)}
+            ];
+            tweetsRepository.getAllByUsername = jest.fn(() => userTweets);
+
+            await tweetController.getTweets(request, response);
+
+            expect(response.statusCode).toBe(200);
+            expect(response._getJSONData()).toEqual(userTweets);
+            expect(tweetsRepository.getAllByUsername).toHaveBeenCalledWith(username);
+        });
+    });
+
+    // getTweet
+    describe('getTweet', () => { 
+        let tweetId, request, response, next;
+
+        beforeEach(() => {
+            tweetId = faker.random.alphaNumeric(16);
+            request = httpMocks.createRequest({
+                params: { id: tweetId }
+            });
+            response = httpMocks.createResponse();
+            next = jest.fn();
+        });
+
+        it('returns the tweet if tweet exists', async () => {
+            const aTweet = { text: faker.random.words(3) };
+            tweetsRepository.getById = jest.fn(() => aTweet);
+
+            await tweetController.getTweet(request, response, next);
+
+            expect(response.statusCode).toBe(200);
+            expect(response._getJSONData()).toEqual(aTweet);
+            expect(tweetsRepository.getById).toHaveBeenCalledWith(tweetId);
+        });
+
+        it("returns 404 error if tweet isn't exist", async () => {
+            tweetsRepository.getById = jest.fn(() =>  undefined);
+
+            await tweetController.getTweet(request, response, next);
+
+            expect(response.statusCode).toBe(404);
+            expect(response._getJSONData()).toMatchObject({
+                message: `Tweet id(${tweetId}) not found`
+            });
+            expect(tweetsRepository.getById).toHaveBeenCalledWith(tweetId);
+        });
+    });
+
+    // createTweet
+    describe('createTweet', () => {
+        let newTweet, authorId, request, response, next;
+        beforeEach(() => {
+            newTweet = faker.random.words(3);
+            authorId = faker.random.alphaNumeric(16);
+            request = httpMocks.createRequest({
+                body: { text: newTweet },
+                userId: authorId,
+            });
+            response = httpMocks.createResponse();
+            next = jest.fn();
+        });
+
+        it('returns 201 with created tweet object including userId', async () => {
+            tweetsRepository.create = jest.fn((text, userId) => {
+                return {
+                    text,
+                    userId,
+                };
+            });
+
+            await tweetController.createTweet(request, response, next);
+
+            expect(response.statusCode).toBe(201);
+            console.log(response._getJSONData());
+            expect(response._getJSONData()).toMatchObject({
+                text: newTweet,
+                userId: authorId,
+            });
+            expect(tweetsRepository.create).toHaveBeenCalledWith(newTweet, authorId);
+        });
+
+        it('should send an event to a websocket channel', async () => {
+            tweetsRepository.create = jest.fn((text, userId) => {
+                return {
+                    text, 
+                    userId,
+                };
+            });
+
+            await tweetController.createTweet(request, response);
+            
+            expect(mockedSocket.emit).toHaveBeenCalledWith('tweets', {
+                text: newTweet,
+                userId: authorId,
+            });
+        });
+    });
+
+    // updateTweet
+    describe('updateTweet', () => {
+        let tweetId, authorId, updatedText, request, response;
+        beforeEach(() => {
+            updatedText = faker.random.words(3);
+            tweetId = faker.random.alphaNumeric(16);
+            authorId = faker.random.alphaNumeric(16);
+            request = httpMocks.createRequest({
+                body: { text: updatedText },
+                params: { id: tweetId },
+                userId: authorId,
+            });
+            response = httpMocks.createResponse();
+        });
+
+        it('returns 200 with updated tweet object including userId', async () => {
+            tweetsRepository.getById = () => ({
+                text: faker.random.words(3),
+                userId: authorId,
+            });
+            tweetsRepository.update = (tweetId, newText) => ({
+                text: newText
+            });
+
+            await tweetController.updateTweet(request, response);
+
+            expect(response.statusCode).toBe(200);
+            expect(response._getJSONData()).toMatchObject({
+                text: updatedText,
+            });
+        });
+
+        it('returns 403 and should not update the repository if the tweet does not belong to the user', async () => {
+            tweetsRepository.getById = () => ({
+                text: faker.random.words(3),
+                userId: faker.random.alphaNumeric(16),
+            });
+            tweetsRepository.udpate = jest.fn();
+
+            await tweetController.updateTweet(request, response);
+
+            expect(response.statusCode).toBe(403);
+        });
+
+        it('returns 404 and should not update the repository if the tweet does not exist', async () => {
+            tweetsRepository.getById = () => undefined;
+            tweetsRepository.update = jest.fn();
+
+            await tweetController.updateTweet(request, response);
+
+            expect(response.statusCode).toBe(404);
+            expect(response._getJSONData().message).toBe(`Tweet not found: ${tweetId}`);
+        });
+    });
+
+    // deleteTweet
+    describe('deleteTweet', () => {
+        let tweetId, authorId, request, response;
+        beforeEach(() => {
+            tweetId = faker.random.alphaNumeric(16);
+            authorId = faker.random.alphaNumeric(16);
+            request = httpMocks.createRequest({
+                params: { id: tweetId },
+                userId: authorId,
+            });
+            response = httpMocks.createResponse();
+        });
+
+        it('returns 204 and remove the tweet from the repository if the tweet exists', async () => {
+            tweetsRepository.getById = () => ({
+                userId: authorId,
+            });
+            tweetsRepository.remove = jest.fn();
+
+            await tweetController.deleteTweet(request, response);
+
+            expect(response.statusCode).toBe(204);
+            expect(tweetsRepository.remove).toHaveBeenCalledWith(tweetId);
+        });
+
+        it('returns 403 and should not update the repository if the tweet does not belong to the user', async () => {
+            tweetsRepository.getById = () => ({
+                userId: faker.random.alphaNumeric(16),
+            });
+            tweetsRepository.remove = jest.fn();
+
+            await tweetController.deleteTweet(request, response);
+
+            expect(response.statusCode).toBe(403);
+            expect(tweetsRepository.remove).not.toHaveBeenCalled();
+        });
+
+        it('returns 404 and should not update the repository if the tweet does not exist', async () => {
+            tweetsRepository.getById = () => undefined;
+            tweetsRepository.remove = jest.fn();
+
+            await tweetController.deleteTweet(request, response);
+
+            expect(response.statusCode).toBe(404);
+            expect(response._getJSONData().message).toBe(`Tweet not found: ${tweetId}`);
+            expect(tweetsRepository.remove).not.toHaveBeenCalled();
+        });
+    });
+});
+```
+
+⭐️ `tweetController`는 *beforeEach*에서 설정해준다.
+
+‼️ **각각의 테스트들이 개별적인 환경을 가지기 위해선 오브젝트들에 대해선 초기화해주는 것이 중요하다** ‼️
+
+✔︎ Dependency Injection을 사용하여 모듈간 디커플링을 시켰기 때문에, 모듈 전체를 mock할 필요는 없다.
+
+`getSocket`에 해당하는 부분은 mock했다. 
+→ *controller*의 `getSocket()`에 해당하는 코드에 `emit`이라는 메서드가 있다. 이를 활용하여, `emit`을 *jest function*으로 정의했다.
+
+❕ **여러가지 종류별로 묶기 위해서 describe 안에서도 describe로 각각 묶어준다.**
+
+⭐️ **getTweets**
+
+1. **username이 없는 경우**
+    
+    ✔︎ `tweetRepository.getAll = () ⇒ allTweets;`
+    → **`tweetRepository`라는 빈 오브젝트에 `getAll`이라는 함수를 추가한다.** `getAll`을 호출하였을 때 `allTweets`을 리턴한다.
+    
+    ✔︎ 모든 데이터가 준비됐을 때, `tweetController`에 있는 `getTweets`함수를 호출하여 준비된 `request`와 `response`를 전달해준다.
+    
+2. **username이 있는 경우**
+    
+    ✔︎ request에 username을 포함한 query 키를 추가하여준다.
+    
+    ✔︎ `tweetRepository.getAllByUsername = jest.fn(() => userTweets);`
+    **→ `tweetRepository`라는 빈 오브젝트에** `getAllByUsername`이라는 함수를 추가한다.
+    
+    ✔︎`expect(tweetRepository.getAllByUsername).toHaveBeenCalledWith(username);`
+    **→ `getAllByUsername`이 호출됐는지 확인했다.**
+    
+
+⭐️ **getTweet**
+
+‼️ **위와 같이 초기화 상태를 필요로 하므로 beforeEach를 이용했다.**
+
+1. **tweet이 존재할 경우** 
+    
+    ✔︎ `aTweet`이라는 변수에 *faker*를 사용하여 랜덤한 문자열을 값으로 둔 `text`라는 키를 갖는 오브젝트를 할당한다.
+    
+    ✔︎ `tweetsRepository.getById = jest.fn(() ⇒ aTweet);`
+    **→ getById를 호출했을 때 aTweet을 리턴한다.**
+    
+    `expect(tweetsRepository.getById).toHaveBeenCalledWith(tweetId);`
+    **→ getById를 호출했을 때 tweetId가 불러와짐을 알 수 있다.**
+    
+2. tweet이 없을 경우
+    
+    ✔︎ 위와는 반대로 `tweet`이 없을 경우이므로 `getById`를 호출했을 때 `undefined`가 리턴됨을 알 수 있다.
+    
+
+<aside>
+💡 **아래 다른 메서드들 관련 테스트들도 위 테스트와 같은 방식으로 이뤄졌다.**
+
+</aside>
