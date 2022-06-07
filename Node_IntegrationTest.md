@@ -85,3 +85,93 @@ package.json에서 main과 npm start부분 변경
 	"start": "nodemon index"
 } 
 ```
+
+<br>
+
+# 노드-통합테스트
+
+### 🍯 **꿀팁**
+
+‼️ **Validate 관련 테스트를 진행할 때 사용하는 API**
+
+[Globals · Jest](https://jestjs.io/docs/api#testeachtablename-fn-timeout)
+
+```tsx
+// router/auth.js VALIDATE
+.
+.
+.
+const validateCredential = [
+  body('username')
+    .trim()
+    .notEmpty()
+    .withMessage('username should be at least 5 characters'),
+  body('password')
+    .trim()
+    .isLength({ min: 5 })
+    .withMessage('password should be at least 5 characters'),
+  validate,
+];
+
+const validateSignup = [
+  ...validateCredential,
+  body('name').notEmpty().withMessage('name is missing'),
+  body('email').isEmail().normalizeEmail().withMessage('invalid email'),
+  body('url')
+    .isURL()
+    .withMessage('invalid URL')
+    .optional({ nullable: true, checkFalsy: true }),
+  validate,
+];
+.
+.
+.
+```
+
+```tsx
+// auth.test.js VALIDATE
+test.each([
+    { missingFieldName: 'name', expectedMessage: 'name is missing' },
+    { 
+        missingFieldName: 'username', 
+        expectedMessage: 'username should be at least 5 characters'},
+    {
+        missingFieldName: 'email',
+        expectedMessage: 'invalid email'
+    },
+    {
+        missingFieldName: 'password',
+        expectedMessage: 'password should be at least 5 characters'
+    },
+])(`returns 400 when $missingFieldName field is missing`, async ({ missingFieldName, expectedMessage }) => {
+    const user = makeValidUserDetails();
+    delete user[missingFieldName];
+    const res = await request.post('/auth/signup', user);
+
+    expect(res.status).toBe(400);
+    expect(res.data.message).toBe(expectedMessage);
+});
+```
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/25567121-ccb5-4a79-ad5e-d66526ad2919/Untitled.png)
+
+✔︎ `test.each`라는 API를 사용하여 `router/auth.js`에서 회원정보 검증을 위해 코딩한 부분에 대해 테스트 코드를 작성했다.
+
+`test.each((table)(`<name>`, () => {}))`
+
+```tsx
+// auth.test.js
+it('returns 400 when password is too short', async () => {
+  const user = {
+      ...makeValidUserDetails(),
+      password: '123',
+  };
+
+  const res = await request.post('/auth/signup', user);
+
+  expect(res.status).toBe(400);
+  expect(res.data.message).toBe('password should be at least 5 characters');
+});
+```
+
+✔︎ 비밀번호가 5자리 미만인 경우에 관한 부분은 따로 테스트 코드를 작성해줬다.
